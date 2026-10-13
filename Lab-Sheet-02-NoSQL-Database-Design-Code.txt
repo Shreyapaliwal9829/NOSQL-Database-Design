@@ -1,0 +1,482 @@
+LAB SHEET 02 — NoSQL DATABASE DESIGN
+CODE FILE ONLY — Commands for all 15 practicals
+Course: BCA
+
+IMPORTANT:
+- This is a command collection for different database tools, not one script to run from top to bottom.
+- Run each section in its matching tool: MySQL, mongosh, redis-cli, cqlsh, HBase shell, or Neo4j Browser.
+- Install/start the relevant database first.
+- Practical 10–13 require a multi-node MongoDB/Cassandra setup; the commands below are examples and need server configuration.
+- MongoDB mapReduce is deprecated in recent versions; the Practical 14 example is included because the lab sheet specifically asks for MapReduce.
+- Use sample data only. Commands that delete data are marked.
+
+============================================================
+PRACTICAL 1 — RDBMS (MySQL) AND DOCUMENT MODEL (MongoDB)
+============================================================
+
+[MySQL — run in MySQL client]
+
+CREATE DATABASE IF NOT EXISTS CollegeRDBMS;
+USE CollegeRDBMS;
+
+CREATE TABLE IF NOT EXISTS Student (
+    Student_ID INT PRIMARY KEY,
+    Name VARCHAR(100),
+    Course VARCHAR(50),
+    Semester INT,
+    Marks DECIMAL(5,2)
+);
+
+INSERT INTO Student (Student_ID, Name, Course, Semester, Marks) VALUES
+(1, 'Aarav Sharma', 'BCA', 5, 86),
+(2, 'Priya Verma', 'BCA', 5, 91),
+(3, 'Rahul Singh', 'BSc', 3, 78),
+(4, 'Neha Gupta', 'BCA', 4, 88),
+(5, 'Kabir Mehta', 'BCom', 5, 81);
+
+SELECT * FROM Student;
+
+[MongoDB — run in mongosh]
+
+use CollegeRDBMS
+db.Students.insertMany([
+  { Student_ID: 1, Name: "Aarav Sharma", Course: "BCA", Semester: 5, Marks: 86 },
+  { Student_ID: 2, Name: "Priya Verma", Course: "BCA", Semester: 5, Marks: 91 },
+  { Student_ID: 3, Name: "Rahul Singh", Course: "BSc", Semester: 3, Marks: 78 },
+  { Student_ID: 4, Name: "Neha Gupta", Course: "BCA", Semester: 4, Marks: 88 },
+  { Student_ID: 5, Name: "Kabir Mehta", Course: "BCom", Semester: 5, Marks: 81 }
+])
+db.Students.find()
+
+[Comparison notes]
+RDBMS: tables/rows, predefined schema, SQL, relationships often use joins.
+MongoDB: BSON documents, flexible fields, queries use MongoDB methods, nested data can be embedded.
+Both can store the same student information. Scaling depends on the deployment and workload.
+
+============================================================
+PRACTICAL 2 — CollegeDB / Students CRUD (MongoDB)
+============================================================
+
+use CollegeDB
+db.Students.insertMany([
+  { Student_ID: 1, Name: "Aarav Sharma", Course: "BCA", Semester: 5, Marks: 86 },
+  { Student_ID: 2, Name: "Priya Verma", Course: "BCA", Semester: 5, Marks: 91 },
+  { Student_ID: 3, Name: "Rahul Singh", Course: "BSc", Semester: 3, Marks: 78 },
+  { Student_ID: 4, Name: "Neha Gupta", Course: "BCA", Semester: 4, Marks: 88 },
+  { Student_ID: 5, Name: "Kabir Mehta", Course: "BCom", Semester: 5, Marks: 81 }
+])
+
+// Display all documents
+db.Students.find()
+
+// Find students from BCA
+db.Students.find({ Course: "BCA" })
+
+// Update marks for student 1
+db.Students.updateOne({ Student_ID: 1 }, { $set: { Marks: 89 } })
+
+// Delete one student (sample: Student_ID 5)
+db.Students.deleteOne({ Student_ID: 5 })
+
+// Count students
+db.Students.countDocuments({})
+
+============================================================
+PRACTICAL 3 — Orders with embedded customer/products (MongoDB)
+============================================================
+
+use CollegeDB
+db.Orders.insertMany([
+  { Order_ID: 1001, customer: { id: 1, name: "Aarav" }, products: [{ name: "Mouse", price: 500, quantity: 2 }, { name: "Keyboard", price: 900, quantity: 1 }] },
+  { Order_ID: 1002, customer: { id: 2, name: "Priya" }, products: [{ name: "Monitor", price: 7500, quantity: 1 }] },
+  { Order_ID: 1003, customer: { id: 1, name: "Aarav" }, products: [{ name: "USB Drive", price: 600, quantity: 3 }] },
+  { Order_ID: 1004, customer: { id: 3, name: "Rahul" }, products: [{ name: "Webcam", price: 1800, quantity: 1 }, { name: "Headset", price: 1200, quantity: 2 }] },
+  { Order_ID: 1005, customer: { id: 4, name: "Neha" }, products: [{ name: "Laptop Stand", price: 1400, quantity: 1 }] }
+])
+
+// Orders for a particular customer
+db.Orders.find({ "customer.name": "Aarav" })
+
+// Update quantity of Mouse in order 1001
+db.Orders.updateOne(
+  { Order_ID: 1001, "products.name": "Mouse" },
+  { $set: { "products.$.quantity": 3 } }
+)
+
+// Calculate total amount per order and display it
+db.Orders.aggregate([
+  { $unwind: "$products" },
+  { $group: {
+      _id: "$Order_ID",
+      customer: { $first: "$customer.name" },
+      totalAmount: { $sum: { $multiply: ["$products.price", "$products.quantity"] } }
+  }},
+  { $sort: { _id: 1 } }
+])
+
+// Orders whose total is above 2000
+db.Orders.aggregate([
+  { $unwind: "$products" },
+  { $group: {
+      _id: "$Order_ID",
+      customer: { $first: "$customer.name" },
+      totalAmount: { $sum: { $multiply: ["$products.price", "$products.quantity"] } }
+  }},
+  { $match: { totalAmount: { $gt: 2000 } } }
+])
+
+============================================================
+PRACTICAL 4 — Key-value student system (Redis)
+============================================================
+
+[Run in redis-cli]
+
+SET student:1 "Aarav Sharma"
+SET student:2 "Priya Verma"
+SET student:3 "Rahul Singh"
+SET student:4 "Neha Gupta"
+SET student:5 "Kabir Mehta"
+
+GET student:3
+SET student:3 "Rahul Kumar"
+GET student:3
+
+DEL student:5
+KEYS student:*
+
+============================================================
+PRACTICAL 5 — Cassandra keyspace and Students table
+============================================================
+
+[Run in cqlsh]
+
+CREATE KEYSPACE IF NOT EXISTS CollegeDB
+WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 1};
+
+USE CollegeDB;
+
+CREATE TABLE IF NOT EXISTS Students (
+    Student_ID int PRIMARY KEY,
+    Name text,
+    Course text,
+    Semester int,
+    Marks float
+);
+
+INSERT INTO Students (Student_ID, Name, Course, Semester, Marks) VALUES (1, 'Aarav Sharma', 'BCA', 5, 86);
+INSERT INTO Students (Student_ID, Name, Course, Semester, Marks) VALUES (2, 'Priya Verma', 'BCA', 5, 91);
+INSERT INTO Students (Student_ID, Name, Course, Semester, Marks) VALUES (3, 'Rahul Singh', 'BSc', 3, 78);
+INSERT INTO Students (Student_ID, Name, Course, Semester, Marks) VALUES (4, 'Neha Gupta', 'BCA', 4, 88);
+INSERT INTO Students (Student_ID, Name, Course, Semester, Marks) VALUES (5, 'Kabir Mehta', 'BCom', 5, 81);
+
+SELECT * FROM Students;
+
+// For filtering by Course, create an index (or design a query table for production):
+CREATE INDEX IF NOT EXISTS students_course_idx ON Students (Course);
+SELECT * FROM Students WHERE Course = 'BCA';
+
+UPDATE Students SET Marks = 93 WHERE Student_ID = 2;
+DELETE FROM Students WHERE Student_ID = 5;
+
+============================================================
+PRACTICAL 6 — HBase Students table
+============================================================
+
+[Run in HBase shell]
+
+create 'Students', 'personal', 'academic'
+
+put 'Students', '1', 'personal:name', 'Aarav Sharma'
+put 'Students', '1', 'personal:course', 'BCA'
+put 'Students', '1', 'academic:semester', '5'
+put 'Students', '1', 'academic:marks', '86'
+
+put 'Students', '2', 'personal:name', 'Priya Verma'
+put 'Students', '2', 'personal:course', 'BCA'
+put 'Students', '2', 'academic:semester', '5'
+put 'Students', '2', 'academic:marks', '91'
+
+put 'Students', '3', 'personal:name', 'Rahul Singh'
+put 'Students', '3', 'personal:course', 'BSc'
+put 'Students', '3', 'academic:semester', '3'
+put 'Students', '3', 'academic:marks', '78'
+
+put 'Students', '4', 'personal:name', 'Neha Gupta'
+put 'Students', '4', 'personal:course', 'BCA'
+put 'Students', '4', 'academic:semester', '4'
+put 'Students', '4', 'academic:marks', '88'
+
+put 'Students', '5', 'personal:name', 'Kabir Mehta'
+put 'Students', '5', 'personal:course', 'BCom'
+put 'Students', '5', 'academic:semester', '5'
+put 'Students', '5', 'academic:marks', '81'
+
+get 'Students', '2'
+put 'Students', '2', 'academic:marks', '94'
+scan 'Students'
+deleteall 'Students', '5'
+
+============================================================
+PRACTICAL 7 — Neo4j Student-Course graph
+============================================================
+
+[Run in Neo4j Browser / Cypher]
+
+CREATE
+  (s1:Student {student_id: 1, name: 'Aarav'}),
+  (s2:Student {student_id: 2, name: 'Priya'}),
+  (s3:Student {student_id: 3, name: 'Rahul'}),
+  (s4:Student {student_id: 4, name: 'Neha'}),
+  (s5:Student {student_id: 5, name: 'Kabir'}),
+  (c1:Course {name: 'BCA'}),
+  (c2:Course {name: 'BSc'}),
+  (c3:Course {name: 'BCom'}),
+  (s1)-[:ENROLLED_IN]->(c1),
+  (s2)-[:ENROLLED_IN]->(c1),
+  (s3)-[:ENROLLED_IN]->(c2),
+  (s4)-[:ENROLLED_IN]->(c1),
+  (s5)-[:ENROLLED_IN]->(c3);
+
+MATCH (s:Student) RETURN s;
+MATCH (s:Student)-[:ENROLLED_IN]->(c:Course {name: 'BCA'}) RETURN s.name, c.name;
+MATCH (s:Student {name: 'Aarav'})-[:ENROLLED_IN]->(c:Course) RETURN c.name;
+
+// Add a relationship
+MATCH (s:Student {name: 'Rahul'}), (c:Course {name: 'BCA'})
+MERGE (s)-[:ENROLLED_IN]->(c);
+
+// Remove that relationship
+MATCH (s:Student {name: 'Rahul'})-[r:ENROLLED_IN]->(c:Course {name: 'BCA'})
+DELETE r;
+
+============================================================
+PRACTICAL 8 — Same dataset: MongoDB, Cassandra, Neo4j
+============================================================
+
+[MongoDB — document model]
+use CompareDB
+db.Students.insertMany([
+  { Student_ID: 1, Name: "Aarav", Course: "BCA", Semester: 5, Marks: 86 },
+  { Student_ID: 2, Name: "Priya", Course: "BCA", Semester: 5, Marks: 91 },
+  { Student_ID: 3, Name: "Rahul", Course: "BSc", Semester: 3, Marks: 78 },
+  { Student_ID: 4, Name: "Neha", Course: "BCA", Semester: 4, Marks: 88 },
+  { Student_ID: 5, Name: "Kabir", Course: "BCom", Semester: 5, Marks: 81 }
+])
+db.Students.find()
+
+[Cassandra — use the Students table from Practical 5]
+SELECT * FROM CollegeDB.Students;
+
+[Neo4j — node/relationship model]
+MATCH (s:Student)-[:ENROLLED_IN]->(c:Course) RETURN s, c;
+
+============================================================
+PRACTICAL 9 — Single server/local MongoDB CRUD
+============================================================
+
+[Start MongoDB service first, then run mongosh]
+
+use LocalStudentDB
+db.Students.insertMany([
+  { Student_ID: 1, Name: "Aarav", Course: "BCA", Marks: 86 },
+  { Student_ID: 2, Name: "Priya", Course: "BCA", Marks: 91 },
+  { Student_ID: 3, Name: "Rahul", Course: "BSc", Marks: 78 },
+  { Student_ID: 4, Name: "Neha", Course: "BCA", Marks: 88 },
+  { Student_ID: 5, Name: "Kabir", Course: "BCom", Marks: 81 }
+])
+db.Students.find()
+db.Students.findOne({ Student_ID: 1 })
+db.Students.updateOne({ Student_ID: 1 }, { $set: { Marks: 90 } })
+db.Students.deleteOne({ Student_ID: 5 })
+db.Students.countDocuments({})
+
+============================================================
+PRACTICAL 10 — MongoDB sharding demonstration
+============================================================
+
+[Concept/configuration example — requires a sharded cluster with mongos,
+config servers, and shard replica sets already configured.]
+
+sh.enableSharding("ShardDemoDB")
+sh.shardCollection("ShardDemoDB.Students", { Student_ID: "hashed" })
+
+use ShardDemoDB
+for (let i = 1; i <= 20; i++) {
+  db.Students.insertOne({
+    Student_ID: i,
+    Name: "Student" + i,
+    Course: i % 2 === 0 ? "BCA" : "BSc",
+    Marks: 60 + (i % 40)
+  })
+}
+
+db.Students.countDocuments({})
+sh.status()
+
+// The shard key is Student_ID hashed, which can distribute inserts across shards.
+// Actual distribution must be verified on a configured sharded cluster.
+
+============================================================
+PRACTICAL 11 — MongoDB Primary-Secondary replication
+============================================================
+
+[Configuration is performed on each MongoDB server's mongod.conf.
+Example replica-set configuration fragment on all members:]
+
+# mongod.conf
+replication:
+  replSetName: "rsCollege"
+
+[Start each mongod instance with its own data path and port; then connect
+to one member with mongosh and initiate the replica set.]
+
+rs.initiate({
+  _id: "rsCollege",
+  members: [
+    { _id: 0, host: "localhost:27017" },
+    { _id: 1, host: "localhost:27018" }
+  ]
+})
+
+rs.status()
+
+// After the replica set elects a primary, insert data on the primary:
+use ReplicationDemo
+db.Students.insertOne({ Student_ID: 1, Name: "Aarav", Course: "BCA" })
+
+// Check rs.status() and connect directly to the secondary to verify replication.
+// A secondary may require read preference secondary for reads.
+// If primary fails, an eligible secondary can be elected primary.
+
+============================================================
+PRACTICAL 12 — Cassandra peer-to-peer replication
+============================================================
+
+[Run in cqlsh on a working Cassandra cluster with multiple nodes]
+
+CREATE KEYSPACE IF NOT EXISTS PeerCollege
+WITH replication = {
+  'class': 'NetworkTopologyStrategy',
+  'datacenter1': 3
+};
+
+USE PeerCollege;
+
+CREATE TABLE IF NOT EXISTS Students (
+  Student_ID int PRIMARY KEY,
+  Name text,
+  Course text,
+  Marks float
+);
+
+INSERT INTO Students (Student_ID, Name, Course, Marks) VALUES (1, 'Aarav', 'BCA', 86);
+INSERT INTO Students (Student_ID, Name, Course, Marks) VALUES (2, 'Priya', 'BCA', 91);
+SELECT * FROM Students;
+
+[From a terminal with nodetool configured]
+nodetool status
+
+// Cassandra nodes use peer-to-peer architecture; replicas are chosen according
+// to the keyspace replication strategy. The datacenter name must match your cluster.
+
+============================================================
+PRACTICAL 13 — Sharding + replication architecture
+============================================================
+
+[MongoDB sharded cluster concept commands — requires a configured cluster]
+
+sh.enableSharding("ShardReplicaDB")
+sh.shardCollection("ShardReplicaDB.Students", { Student_ID: "hashed" })
+
+use ShardReplicaDB
+for (let i = 1; i <= 20; i++) {
+  db.Students.insertOne({
+    Student_ID: i,
+    Name: "Student" + i,
+    Course: i % 2 === 0 ? "BCA" : "BSc"
+  })
+}
+
+sh.status()
+db.Students.countDocuments({})
+
+// Each shard should itself be a replica set in a production sharded cluster.
+// Sharding improves horizontal scalability; replication improves availability
+// and fault tolerance. These commands do not create/configure the servers by themselves.
+
+============================================================
+PRACTICAL 14 — MapReduce: students per course and average marks
+============================================================
+
+[MongoDB mongosh — legacy MapReduce API; deprecated in modern MongoDB.
+If unsupported, use aggregation instead.]
+
+use MapReduceDB
+db.StudentMarks.insertMany([
+  { Student_ID: 1, Name: "Aarav", Course: "BCA", Marks: 86 },
+  { Student_ID: 2, Name: "Priya", Course: "BCA", Marks: 91 },
+  { Student_ID: 3, Name: "Rahul", Course: "BSc", Marks: 78 },
+  { Student_ID: 4, Name: "Neha", Course: "BCA", Marks: 88 },
+  { Student_ID: 5, Name: "Kabir", Course: "BSc", Marks: 81 }
+])
+
+var mapCourseCount = function () {
+  emit(this.Course, { count: 1, totalMarks: this.Marks });
+};
+
+var reduceCourseCount = function (course, values) {
+  var result = { count: 0, totalMarks: 0 };
+  values.forEach(function (v) {
+    result.count += v.count;
+    result.totalMarks += v.totalMarks;
+  });
+  return result;
+};
+
+db.StudentMarks.mapReduce(
+  mapCourseCount,
+  reduceCourseCount,
+  { out: "CourseMapReduceResults" }
+);
+
+db.CourseMapReduceResults.find().forEach(function (doc) {
+  printjson({
+    Course: doc._id,
+    StudentCount: doc.value.count,
+    AverageMarks: doc.value.totalMarks / doc.value.count
+  });
+});
+
+[Modern alternative using aggregation]
+db.StudentMarks.aggregate([
+  { $group: {
+      _id: "$Course",
+      StudentCount: { $sum: 1 },
+      AverageMarks: { $avg: "$Marks" }
+  }}
+])
+
+============================================================
+PRACTICAL 15 — Distribution models (commands / architecture checks)
+============================================================
+
+[Single server — MongoDB]
+db.serverStatus().host
+db.Students.find().limit(5)
+
+[Sharding — MongoDB, on a configured sharded cluster]
+sh.status()
+
+[Primary-secondary replication — MongoDB replica set]
+rs.status()
+rs.printReplicationInfo()
+
+[Peer-to-peer replication — Cassandra cluster, from terminal]
+nodetool status
+
+[Sharding + replication — MongoDB sharded cluster]
+sh.status()
+
+[Use the above command output to document architecture, data distribution,
+failure handling, one advantage, one limitation, and one suitable application
+for each model in the written lab record.]
